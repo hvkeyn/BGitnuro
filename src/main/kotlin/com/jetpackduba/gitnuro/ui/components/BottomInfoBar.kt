@@ -43,7 +43,7 @@ fun BottomInfoBar(
         }
 
         Text(
-            stringResource(Res.string.bottom_info_bar_app_version, AppConstants.APP_VERSION),
+            stringResource(Res.string.bottom_info_bar_app_version, AppConstants.APP_VERSION_DISPLAY),
             style = MaterialTheme.typography.body2,
             maxLines = 1,
         )

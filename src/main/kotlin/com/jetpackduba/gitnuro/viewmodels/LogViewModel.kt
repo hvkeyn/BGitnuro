@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import com.jetpackduba.gitnuro.TaskType
 import com.jetpackduba.gitnuro.extensions.delayedStateChange
 import com.jetpackduba.gitnuro.extensions.shortName
+import com.jetpackduba.gitnuro.git.archive.ArchiveCommitUseCase
+import com.jetpackduba.gitnuro.git.bundle.CreateBundleFromCommitUseCase
 import com.jetpackduba.gitnuro.git.CloseableView
 import com.jetpackduba.gitnuro.git.RefreshType
 import com.jetpackduba.gitnuro.git.TabState
@@ -21,6 +23,7 @@ import com.jetpackduba.gitnuro.git.workspace.GetStatusSummaryUseCase
 import com.jetpackduba.gitnuro.git.workspace.StatusSummary
 import com.jetpackduba.gitnuro.models.positiveNotification
 import com.jetpackduba.gitnuro.repositories.AppSettingsRepository
+import com.jetpackduba.gitnuro.system.SaveFilePickerUseCase
 import com.jetpackduba.gitnuro.ui.SelectedItem
 import com.jetpackduba.gitnuro.ui.context_menu.copyBranchNameToClipboardAndGetNotification
 import com.jetpackduba.gitnuro.ui.log.LogDialog
@@ -34,6 +37,7 @@ import org.eclipse.jgit.api.errors.CheckoutConflictException
 import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.revwalk.RevCommit
 import org.jetbrains.skiko.ClipboardManager
+import java.io.File
 import javax.inject.Inject
 import kotlin.math.max
 
@@ -65,6 +69,9 @@ class LogViewModel @Inject constructor(
     private val cherryPickCommitUseCase: CherryPickCommitUseCase,
     private val createTagOnCommitUseCase: CreateTagOnCommitUseCase,
     private val startRebaseInteractiveUseCase: StartRebaseInteractiveUseCase,
+    private val saveFilePickerUseCase: SaveFilePickerUseCase,
+    private val archiveCommitUseCase: ArchiveCommitUseCase,
+    private val createBundleFromCommitUseCase: CreateBundleFromCommitUseCase,
     private val tabState: TabState,
     private val appSettingsRepository: AppSettingsRepository,
     private val tabScope: CoroutineScope,
@@ -217,6 +224,47 @@ class LogViewModel @Inject constructor(
         cherryPickCommitUseCase(git, revCommit)
 
         positiveNotification("Commit cherry-picked")
+    }
+
+    fun archiveCommit(revCommit: RevCommit) {
+        val repo = tabState.git.repository
+        val shortSha = revCommit.name.take(7)
+        val defaultFileName = "${repo.workTree.name}-$shortSha.zip"
+        val selectedPath = saveFilePickerUseCase(defaultFileName, repo.workTree.absolutePath) ?: return
+        val outputFile = ensureExtension(File(selectedPath), ".zip")
+
+        tabState.safeProcessing(
+            refreshType = RefreshType.NONE,
+            title = "Archive",
+            subtitle = "Creating archive for $shortSha",
+            taskType = TaskType.EXPORT_ARCHIVE,
+        ) { git ->
+            val filesCount = archiveCommitUseCase(git, revCommit.id, outputFile)
+            positiveNotification("Archive created ($filesCount files)")
+        }
+    }
+
+    fun bundleCommitAndDescendants(revCommit: RevCommit) {
+        val repo = tabState.git.repository
+        val shortSha = revCommit.name.take(7)
+        val defaultFileName = "${repo.workTree.name}-$shortSha-descendants.bundle"
+        val selectedPath = saveFilePickerUseCase(defaultFileName, repo.workTree.absolutePath) ?: return
+        val outputFile = ensureExtension(File(selectedPath), ".bundle")
+
+        tabState.safeProcessing(
+            refreshType = RefreshType.NONE,
+            title = "Bundle",
+            subtitle = "Creating bundle from $shortSha",
+            taskType = TaskType.EXPORT_BUNDLE,
+        ) { git ->
+            val result = createBundleFromCommitUseCase(git, revCommit.id, outputFile)
+            positiveNotification("Bundle created (${result.includedRefsCount} refs)")
+        }
+    }
+
+    private fun ensureExtension(file: File, extension: String): File {
+        val ext = extension.lowercase()
+        return if (file.name.lowercase().endsWith(ext)) file else File(file.absolutePath + ext)
     }
 
     fun createBranchOnCommit(branch: String, revCommit: RevCommit) = tabState.safeProcessing(

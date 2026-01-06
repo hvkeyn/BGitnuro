@@ -1,5 +1,6 @@
 package com.jetpackduba.gitnuro
 
+import com.jetpackduba.gitnuro.build.BGitnuroBuildInfo
 import com.jetpackduba.gitnuro.models.DateTimeFormat
 import com.jetpackduba.gitnuro.preferences.AvatarProviderType
 
@@ -21,10 +22,20 @@ object AppConstants {
 
 
     // Remember to update build.gradle when changing this
-    const val APP_NAME = "Gitnuro"
+    const val APP_NAME = "BGitnuro"
     const val APP_DESCRIPTION =
-        "Gitnuro is a Git client that allows you to manage multiple repositories with a modern experience and live visual representation of your repositories' state."
+        "BGitnuro is a Git client based on Gitnuro, focused on fast workflows and extra tooling (archive/bundle import-export)."
+    /**
+     * Upstream (Gitnuro) version.
+     * Keep it in sync with Gradle `projectVersion` / `projectVersionSimplified`.
+     */
     const val APP_VERSION = "1.5.0"
+
+    /**
+     * Display version shown in UI.
+     * Includes upstream version + BGitnuro version (auto-incremented patch per build).
+     */
+    val APP_VERSION_DISPLAY: String = "$APP_VERSION + BGitnuro ${BGitnuroBuildInfo.BGITNURO_VERSION}"
     const val APP_VERSION_CODE = 22
     const val VERSION_CHECK_URL = "https://raw.githubusercontent.com/JetpackDuba/Gitnuro/main/latest.json"
 }

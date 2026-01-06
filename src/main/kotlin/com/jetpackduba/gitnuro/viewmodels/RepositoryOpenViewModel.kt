@@ -34,9 +34,12 @@ import kotlinx.coroutines.launch
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.CheckoutConflictException
 import org.eclipse.jgit.blame.BlameResult
+import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.lib.RepositoryState
 import org.eclipse.jgit.revwalk.RevCommit
+import org.eclipse.jgit.transport.RefSpec
 import java.awt.Desktop
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -350,6 +353,72 @@ class RepositoryOpenViewModel @Inject constructor(
         refreshType = RefreshType.NONE,
     ) { git ->
         Desktop.getDesktop().open(git.repository.workTree)
+    }
+
+    fun importBundle() {
+        val repo = tabState.git.repository
+        val selectedPath = openFilePickerUseCase(PickerType.FILES, repo.workTree.absolutePath) ?: return
+        val bundleFile = File(selectedPath)
+        val destinationPrefix = buildBundleDestinationPrefix(bundleFile)
+
+        tabState.safeProcessing(
+            refreshType = RefreshType.ALL_DATA,
+            title = "Import bundle",
+            subtitle = "Importing ${bundleFile.name}",
+            taskType = TaskType.IMPORT_BUNDLE,
+        ) { git ->
+            val refSpec = RefSpec("+refs/heads/*:refs/heads/$destinationPrefix/*")
+
+            // Try both path and URI; JGit transport handling differs across platforms.
+            val remoteCandidates = listOf(
+                bundleFile.absolutePath,
+                bundleFile.toURI().toString(),
+            )
+
+            var lastError: Exception? = null
+            for (remote in remoteCandidates) {
+                try {
+                    val fetchResult = git.fetch()
+                        .setRemote(remote)
+                        .setRefSpecs(refSpec)
+                        .call()
+
+                    val updates = fetchResult.trackingRefUpdates.size
+                    return@safeProcessing positiveNotification(
+                        "Bundle imported to \"$destinationPrefix\" ($updates branches)"
+                    )
+                } catch (ex: Exception) {
+                    lastError = ex
+                }
+            }
+
+            throw lastError ?: IllegalStateException("Failed to import bundle: unknown error")
+        }
+    }
+
+    fun resolveConflicts() = tabScope.launch {
+        tabState.newSelectedItem(SelectedItem.UncommittedChanges, scrollToItem = true)
+    }
+
+    private fun buildBundleDestinationPrefix(bundleFile: File): String {
+        val sanitizedName = sanitizeRefComponent(bundleFile.nameWithoutExtension)
+        val suffix = System.currentTimeMillis()
+        val candidate = "bundle/$sanitizedName-$suffix"
+
+        // We validate a sample ref under this prefix.
+        return if (Repository.isValidRefName("refs/heads/$candidate/test")) {
+            candidate
+        } else {
+            "bundle/import-$suffix"
+        }
+    }
+
+    private fun sanitizeRefComponent(value: String): String {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return "bundle"
+        // Replace characters that commonly break ref names.
+        val sanitized = trimmed.replace(Regex("""[^0-9A-Za-z._-]"""), "_")
+        return sanitized.take(50).ifBlank { "bundle" }
     }
 
     fun openUrlInBrowser(url: String) {

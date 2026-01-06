@@ -47,7 +47,7 @@ fun AppInfoDialog(
                         )
 
                         Text(
-                            "Gitnuro has been possible thanks to the following open source projects:",
+                            "BGitnuro (based on Gitnuro) has been possible thanks to the following open source projects:",
                             style = MaterialTheme.typography.body1,
                             modifier = Modifier.padding(vertical = 16.dp)
                         )

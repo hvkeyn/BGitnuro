@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Gitnuro</string>
+    <string name="app_name">BGitnuro</string>
 
     <!-- Generic -->
     <string name="generic_button_ok">OK</string>
@@ -117,6 +117,8 @@
     <string name="log_context_menu_revert_commit">Revert commit</string>
     <string name="log_context_menu_cherry_pick_commit">Cherry-pick commit</string>
     <string name="log_context_menu_reset_current_branch_to_commit">Reset current branch to this commit</string>
+    <string name="log_context_menu_archive_commit">Archive…</string>
+    <string name="log_context_menu_bundle_commit_and_descendants">Bundle commit and descendants…</string>
 
     <!-- Pull context menu -->
     <string name="pull_context_menu_pull_with_merge">Pull with merge</string>

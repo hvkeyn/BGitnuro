@@ -2,17 +2,17 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 rem ============================================================
-rem Gitnuro one-click Windows build
+rem BGitnuro one-click Windows build
 rem
 rem Usage:
-rem   build.bat                 -> builds portable app image (Gitnuro.exe folder)
+rem   build.bat                 -> builds portable app image (BGitnuro.exe folder)
 rem   build.bat portable        -> same as default
 rem   build.bat installer       -> additionally builds Inno Setup installer (if ISCC.exe available)
 rem   build.bat help            -> prints this message
 rem
 rem Outputs:
-rem   dist\Gitnuro\Gitnuro.exe
-rem   dist\installer\Gitnuro_Windows_Installer_<version>.exe  (installer mode)
+rem   dist\BGitnuro\BGitnuro.exe
+rem   dist\installer\BGitnuro_Windows_Installer_<version>.exe  (installer mode)
 rem ============================================================
 
 pushd "%~dp0" >nul
@@ -39,7 +39,7 @@ call :ensure_rust_tools || goto :fail
 call :ensure_java || goto :fail
 
 echo.
-echo === Building Gitnuro (%MODE%) ===
+echo === Building BGitnuro (%MODE%) ===
 echo Version: %APP_VERSION%
 echo.
 
@@ -54,7 +54,7 @@ if /i "%MODE%"=="installer" (
 
 echo.
 echo SUCCESS.
-echo - App: "%CD%\dist\Gitnuro\Gitnuro.exe"
+echo - App: "%CD%\dist\BGitnuro\BGitnuro.exe"
 if /i "%MODE%"=="installer" (
   echo - Installer: "%CD%\dist\installer\"
 )
@@ -63,7 +63,7 @@ popd >nul
 exit /b 0
 
 :usage
-echo Gitnuro build script
+echo BGitnuro build script
 echo.
 echo Usage:
 echo   build.bat ^<mode^>
@@ -304,7 +304,7 @@ if not exist "%JAVA_HOME%\bin\java.exe" (
 
 if not exist "%JAVA_HOME%\bin\jpackage.exe" (
   echo ERROR: jpackage.exe not found in "%JAVA_HOME%\bin".
-  echo Gitnuro packaging requires a full JDK ^(not just a JRE^).
+  echo BGitnuro packaging requires a full JDK ^(not just a JRE^).
   exit /b 1
 )
 
@@ -363,17 +363,17 @@ exit /b 1
 exit /b 0
 
 :collect_artifacts
-set "APP_DIR=build\compose\binaries\main\app\Gitnuro"
-if not exist "%APP_DIR%\Gitnuro.exe" (
-  echo ERROR: Expected app image not found: "%CD%\%APP_DIR%\Gitnuro.exe"
+set "APP_DIR=build\compose\binaries\main\app\BGitnuro"
+if not exist "%APP_DIR%\BGitnuro.exe" (
+  echo ERROR: Expected app image not found: "%CD%\%APP_DIR%\BGitnuro.exe"
   echo Gradle task "createDistributable" should create it.
   exit /b 1
 )
 
 if exist "dist" rmdir /s /q "dist"
-mkdir "dist\Gitnuro" >nul 2>&1
+mkdir "dist\BGitnuro" >nul 2>&1
 
-robocopy "%APP_DIR%" "dist\Gitnuro" /E /NFL /NDL /NJH /NJS /NP >nul
+robocopy "%APP_DIR%" "dist\BGitnuro" /E /NFL /NDL /NJH /NJS /NP >nul
 set "RC=%ERRORLEVEL%"
 if %RC% GEQ 8 (
   echo ERROR: Failed to copy app image to dist ^(robocopy exit code: %RC%^).

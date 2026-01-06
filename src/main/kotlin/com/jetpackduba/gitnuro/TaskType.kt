@@ -58,4 +58,7 @@ enum class TaskType {
     REPOSITORY_CLONE,
     ADD_REMOTE,
     DELETE_REMOTE,
+    EXPORT_ARCHIVE,
+    EXPORT_BUNDLE,
+    IMPORT_BUNDLE,
 }

@@ -132,6 +132,9 @@ data class Error(
             TaskType.REPOSITORY_CLONE -> "Could not clone the repository"
             TaskType.ADD_REMOTE -> "Adding remote failed"
             TaskType.DELETE_REMOTE -> "Deleting remote failed"
+            TaskType.EXPORT_ARCHIVE -> "Export archive failed"
+            TaskType.EXPORT_BUNDLE -> "Export bundle failed"
+            TaskType.IMPORT_BUNDLE -> "Import bundle failed"
         }
     }
 }

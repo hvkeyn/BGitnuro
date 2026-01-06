@@ -10,6 +10,8 @@ fun logContextMenu(
     onCheckoutCommit: () -> Unit,
     onCreateNewBranch: () -> Unit,
     onCreateNewTag: () -> Unit,
+    onArchiveCommit: () -> Unit,
+    onBundleCommitAndDescendants: () -> Unit,
     onRevertCommit: () -> Unit,
     onCherryPickCommit: () -> Unit,
     onResetBranch: () -> Unit,
@@ -30,6 +32,18 @@ fun logContextMenu(
         composableLabel = { stringResource(Res.string.log_context_menu_create_tag) },
         icon = { painterResource(Res.drawable.tag) },
         onClick = onCreateNewTag
+    )
+
+    add(ContextMenuElement.ContextSeparator)
+
+    addContextMenu(
+        composableLabel = { stringResource(Res.string.log_context_menu_archive_commit) },
+        onClick = onArchiveCommit
+    )
+
+    addContextMenu(
+        composableLabel = { stringResource(Res.string.log_context_menu_bundle_commit_and_descendants) },
+        onClick = onBundleCommitAndDescendants
     )
 
     add(ContextMenuElement.ContextSeparator)

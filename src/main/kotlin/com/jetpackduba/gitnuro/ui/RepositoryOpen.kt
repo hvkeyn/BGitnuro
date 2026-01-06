@@ -96,6 +96,8 @@ fun RepositoryOpenPage(
                     QuickActionType.OPEN_DIR_IN_FILE_MANAGER -> repositoryOpenViewModel.openFolderInFileExplorer()
                     QuickActionType.CLONE -> onShowCloneDialog()
                     QuickActionType.REFRESH -> repositoryOpenViewModel.refreshAll()
+                    QuickActionType.UNBUNDLE -> repositoryOpenViewModel.importBundle()
+                    QuickActionType.RESOLVE_CONFLICTS -> repositoryOpenViewModel.resolveConflicts()
                     QuickActionType.SIGN_OFF -> showSignOffDialog = true
                 }
             },

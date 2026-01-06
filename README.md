@@ -1,15 +1,25 @@
-# Gitnuro - Multiplatform Git Client
+# BGitnuro - Multiplatform Git Client
 
-[![Latest release](https://img.shields.io/github/v/release/JetpackDuba/Gitnuro?color=blue&label=latest%20release)](https://github.com/JetpackDuba/Gitnuro/releases/latest)
+Fork of [Gitnuro](https://github.com/JetpackDuba/Gitnuro) with additional tooling and Windows one-click build.
 
 ![Icon](res/img/cover.png)
 
 A FOSS Git client based on (Jetbrains) Compose and JGit.
 
-The main goal of Gitnuro is to provide a multiplatform open source Git client without any kind of constraint to how you
+## BGitnuro changes
+
+- **One-click Windows build**: `build.bat` (auto JDK 17, cargo-kotars, Strawberry Perl, NASM, MSVC env detection).
+- **Archive from log**: context menu `Archive…` exports a ZIP of the selected commit state.
+- **Bundle export**: context menu `Bundle commit and descendants…` exports a git bundle.
+- **Bundle import**: Actions → `Import bundle (unbundle)…` imports a `.bundle` into `bundle/<name>-<timestamp>/...` branches.
+- **Resolve conflicts shortcut**: Actions → `Resolve conflicts…` jumps to Uncommitted Changes.
+
+The main goal of BGitnuro is to provide a multiplatform open source Git client without any kind of constraint to how you
 can use it nor relying on web technologies.
 
 ## Download/Install
+
+Note: download links below refer to upstream Gitnuro releases. BGitnuro is currently intended to be built from source.
 
 Linux:
 
@@ -30,7 +40,7 @@ MacOS:
 
 ## Features
 
-Gitnuro has support for the following features:
+BGitnuro has support for the following features:
 
 - View diffs for text based files.
 - View your history log and all its branches.
@@ -87,17 +97,17 @@ See [this page](DEVELOPMENT.md) for how to set up your development environment.
 
 ## FAQ
 
-> Is Gitnuro completly free?
+> Is BGitnuro completly free?
 
 Yes, free in both meanings of the word (in money and freedom).
 
-> Does Gitnuro keep track of my data?
+> Does BGitnuro keep track of my data?
 
-Gitnuro does not track data in any way, don't worry.
+BGitnuro does not track data in any way, don't worry.
 
 > I don't like the built-in themes, can I create a custom one?
 
-Gitnuro includes the option to set custom themes in a JSON format. Keep in mind that themes may break with new releases,
+BGitnuro includes the option to set custom themes in a JSON format. Keep in mind that themes may break with new releases,
 making the default theme the fallback option.
 
 For the latest stable version, you can use this JSON as an example:
@@ -168,5 +178,5 @@ Example for windows (you may want to edit `C:\Program Files\Git\etc\gitconfig`):
 
 ## Sponsors
 
-Thank you to all the sponsors for helping improve Gitnuro and JetBrains for providing the necessary tooling.
+Thank you to all the sponsors for helping improve BGitnuro and JetBrains for providing the necessary tooling.
 

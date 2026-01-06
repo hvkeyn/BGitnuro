@@ -38,6 +38,8 @@ fun QuickActionsDialog(
             QuickAction(Res.drawable.code, "Open repository in file manager", QuickActionType.OPEN_DIR_IN_FILE_MANAGER),
             QuickAction(Res.drawable.download, "Clone new repository", QuickActionType.CLONE),
             QuickAction(Res.drawable.refresh, "Refresh repository data", QuickActionType.REFRESH),
+            QuickAction(Res.drawable.download, "Import bundle (unbundle)…", QuickActionType.UNBUNDLE),
+            QuickAction(Res.drawable.warning, "Resolve conflicts…", QuickActionType.RESOLVE_CONFLICTS),
             QuickAction(Res.drawable.sign, "Signoff config", QuickActionType.SIGN_OFF),
         )
     }
@@ -130,5 +132,7 @@ enum class QuickActionType {
     OPEN_DIR_IN_FILE_MANAGER,
     CLONE,
     REFRESH,
+    UNBUNDLE,
+    RESOLVE_CONFLICTS,
     SIGN_OFF
 }

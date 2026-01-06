@@ -6,4 +6,4 @@ pluginManagement {
     }
 
 }
-rootProject.name = "Gitnuro"
+rootProject.name = "BGitnuro"
