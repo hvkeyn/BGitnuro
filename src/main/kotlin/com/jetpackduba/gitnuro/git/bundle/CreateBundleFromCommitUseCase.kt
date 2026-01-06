@@ -23,7 +23,7 @@ data class BundleExportResult(
  *
  * This roughly matches Mercurial/TortoiseHg "bundle revision and its descendants" semantics.
  *
- * IMPORTANT: The bundle is incremental: it assumes all parents of [baseCommitId] are already present in the target repo.
+ * NOTE: The bundle is self-contained (no prerequisites) so it can be imported into an empty repository.
  */
 class CreateBundleFromCommitUseCase @Inject constructor() {
     suspend operator fun invoke(
@@ -46,9 +46,6 @@ class CreateBundleFromCommitUseCase @Inject constructor() {
 
             val bundleWriter = BundleWriter(repo)
 
-            // Prerequisites (exclude history before base commit; include base commit and descendants)
-            assumeParents(bundleWriter, baseCommit)
-
             if (descendantBranchRefs.isNotEmpty()) {
                 descendantBranchRefs.forEach { ref ->
                     // Keep original ref names inside the bundle (refs/heads/<name>)
@@ -68,13 +65,6 @@ class CreateBundleFromCommitUseCase @Inject constructor() {
                 includedRefsCount = maxOf(1, descendantBranchRefs.size),
                 outputFile = outputFile,
             )
-        }
-    }
-
-    private fun assumeParents(bundleWriter: BundleWriter, baseCommit: RevCommit) {
-        // If baseCommit has no parents (root commit), this makes the bundle self-contained.
-        baseCommit.parents.forEach { parent ->
-            bundleWriter.assume(parent)
         }
     }
 }

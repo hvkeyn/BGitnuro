@@ -4,6 +4,7 @@ import com.jetpackduba.gitnuro.SharedRepositoryStateManager
 import com.jetpackduba.gitnuro.TaskType
 import com.jetpackduba.gitnuro.exceptions.codeToMessage
 import com.jetpackduba.gitnuro.git.*
+import com.jetpackduba.gitnuro.git.branches.CheckoutRefUseCase
 import com.jetpackduba.gitnuro.git.branches.CreateBranchUseCase
 import com.jetpackduba.gitnuro.git.rebase.RebaseInteractiveState
 import com.jetpackduba.gitnuro.git.stash.StashChangesUseCase
@@ -34,6 +35,7 @@ import kotlinx.coroutines.launch
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.CheckoutConflictException
 import org.eclipse.jgit.blame.BlameResult
+import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.lib.RepositoryState
 import org.eclipse.jgit.revwalk.RevCommit
@@ -62,6 +64,7 @@ class RepositoryOpenViewModel @Inject constructor(
     private val fileChangesWatcher: FileChangesWatcher,
     private val getAuthorInfoUseCase: GetAuthorInfoUseCase,
     private val createBranchUseCase: CreateBranchUseCase,
+    private val checkoutRefUseCase: CheckoutRefUseCase,
     private val stashChangesUseCase: StashChangesUseCase,
     private val stageUntrackedFileUseCase: StageUntrackedFileUseCase,
     private val openFilePickerUseCase: OpenFilePickerUseCase,
@@ -359,7 +362,7 @@ class RepositoryOpenViewModel @Inject constructor(
         val repo = tabState.git.repository
         val selectedPath = openFilePickerUseCase(PickerType.FILES, repo.workTree.absolutePath) ?: return
         val bundleFile = File(selectedPath)
-        val destinationPrefix = buildBundleDestinationPrefix(bundleFile)
+        val destinationPrefix = buildBundleDestinationPrefix(repo, bundleFile)
 
         tabState.safeProcessing(
             refreshType = RefreshType.ALL_DATA,
@@ -378,14 +381,35 @@ class RepositoryOpenViewModel @Inject constructor(
             var lastError: Exception? = null
             for (remote in remoteCandidates) {
                 try {
-                    val fetchResult = git.fetch()
+                    git.fetch()
                         .setRemote(remote)
                         .setRefSpecs(refSpec)
                         .call()
 
-                    val updates = fetchResult.trackingRefUpdates.size
+                    val importedBranches = git.branchList().call()
+                        .filter { it.name.startsWith("refs/heads/$destinationPrefix/") }
+
+                    if (importedBranches.isEmpty()) {
+                        return@safeProcessing errorNotification(
+                            "Bundle imported, but no branches were created (bundle has no refs/heads)."
+                        )
+                    }
+
+                    val pickedBranch = pickBranchToCheckout(importedBranches)
+                    val pickedBranchName = Repository.shortenRefName(pickedBranch.name)
+                    val importedCount = importedBranches.size
+
+                    val isClean = git.status().call().isClean
+                    if (isClean) {
+                        checkoutRefUseCase(git, pickedBranch)
+                        return@safeProcessing positiveNotification(
+                            "Bundle imported and checked out \"$pickedBranchName\" ($importedCount branches)"
+                        )
+                    }
+
                     return@safeProcessing positiveNotification(
-                        "Bundle imported to \"$destinationPrefix\" ($updates branches)"
+                        "Bundle imported to \"$destinationPrefix\" ($importedCount branches). " +
+                            "To restore files, checkout \"$pickedBranchName\" (working tree is not clean)."
                     )
                 } catch (ex: Exception) {
                     lastError = ex
@@ -400,17 +424,40 @@ class RepositoryOpenViewModel @Inject constructor(
         tabState.newSelectedItem(SelectedItem.UncommittedChanges, scrollToItem = true)
     }
 
-    private fun buildBundleDestinationPrefix(bundleFile: File): String {
+    private fun buildBundleDestinationPrefix(repo: Repository, bundleFile: File): String {
         val sanitizedName = sanitizeRefComponent(bundleFile.nameWithoutExtension)
-        val suffix = System.currentTimeMillis()
-        val candidate = "bundle/$sanitizedName-$suffix"
+        val baseCandidate = "bundle/$sanitizedName"
 
         // We validate a sample ref under this prefix.
-        return if (Repository.isValidRefName("refs/heads/$candidate/test")) {
-            candidate
+        if (Repository.isValidRefName("refs/heads/$baseCandidate/test")) {
+            val exactExists = repo.exactRef("refs/heads/$baseCandidate") != null
+            val prefixExists = repo.refDatabase
+                .getRefsByPrefix("refs/heads/$baseCandidate/")
+                .iterator()
+                .hasNext()
+
+            if (!exactExists && !prefixExists) {
+                return baseCandidate
+            }
+        }
+
+        val suffix = System.currentTimeMillis()
+        val fallbackCandidate = "bundle/$sanitizedName-$suffix"
+        return if (Repository.isValidRefName("refs/heads/$fallbackCandidate/test")) {
+            fallbackCandidate
         } else {
             "bundle/import-$suffix"
         }
+    }
+
+    private fun pickBranchToCheckout(importedBranches: List<Ref>): Ref {
+        val preferredSuffixes = listOf("/main", "/master", "/trunk", "/develop")
+
+        for (suffix in preferredSuffixes) {
+            importedBranches.firstOrNull { Repository.shortenRefName(it.name).endsWith(suffix) }?.let { return it }
+        }
+
+        return importedBranches.minBy { it.name }
     }
 
     private fun sanitizeRefComponent(value: String): String {
