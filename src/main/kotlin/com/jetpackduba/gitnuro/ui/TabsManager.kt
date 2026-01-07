@@ -3,6 +3,7 @@ package com.jetpackduba.gitnuro.ui
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import com.jetpackduba.gitnuro.di.AppComponent
+import com.jetpackduba.gitnuro.managers.AppStateManager
 import com.jetpackduba.gitnuro.repositories.AppSettingsRepository
 import com.jetpackduba.gitnuro.ui.components.TabInformation
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ import javax.inject.Singleton
 @Singleton
 class TabsManager @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
+    private val appStateManager: AppStateManager,
 ) {
     lateinit var appComponent: AppComponent
 
@@ -70,6 +72,9 @@ class TabsManager @Inject constructor(
         if (selectTab) {
             _currentTab.value = newTab
         }
+
+        // Persist immediately so the repo is visible in "recent/open" lists without needing to switch tabs.
+        updatePersistedTabs()
     }
 
     fun selectTab(tab: TabInformation) {
@@ -121,6 +126,8 @@ class TabsManager @Inject constructor(
 
         appSettingsRepository.latestTabsOpened = Json.encodeToString(tabs.map { it.path })
         appSettingsRepository.latestRepositoryTabSelected = tabs.indexOf(currentTab.value)
+
+        appStateManager.ensureRepositoriesKnown(tabs.mapNotNull { it.path })
     }
 
     fun addNewEmptyTab() {

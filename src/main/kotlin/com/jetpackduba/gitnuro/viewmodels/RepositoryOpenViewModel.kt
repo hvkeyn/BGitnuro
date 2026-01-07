@@ -6,6 +6,8 @@ import com.jetpackduba.gitnuro.exceptions.codeToMessage
 import com.jetpackduba.gitnuro.git.*
 import com.jetpackduba.gitnuro.git.branches.CheckoutRefUseCase
 import com.jetpackduba.gitnuro.git.branches.CreateBranchUseCase
+import com.jetpackduba.gitnuro.git.remotes.AddRemoteUseCase
+import com.jetpackduba.gitnuro.git.remotes.UpdateRemoteUseCase
 import com.jetpackduba.gitnuro.git.rebase.RebaseInteractiveState
 import com.jetpackduba.gitnuro.git.stash.StashChangesUseCase
 import com.jetpackduba.gitnuro.git.workspace.StageUntrackedFileUseCase
@@ -32,6 +34,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.eclipse.jgit.api.ListBranchCommand
+import org.eclipse.jgit.api.RemoteSetUrlCommand
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.CheckoutConflictException
 import org.eclipse.jgit.blame.BlameResult
@@ -65,6 +69,8 @@ class RepositoryOpenViewModel @Inject constructor(
     private val getAuthorInfoUseCase: GetAuthorInfoUseCase,
     private val createBranchUseCase: CreateBranchUseCase,
     private val checkoutRefUseCase: CheckoutRefUseCase,
+    private val addRemoteUseCase: AddRemoteUseCase,
+    private val updateRemoteUseCase: UpdateRemoteUseCase,
     private val stashChangesUseCase: StashChangesUseCase,
     private val stageUntrackedFileUseCase: StageUntrackedFileUseCase,
     private val openFilePickerUseCase: OpenFilePickerUseCase,
@@ -362,7 +368,8 @@ class RepositoryOpenViewModel @Inject constructor(
         val repo = tabState.git.repository
         val selectedPath = openFilePickerUseCase(PickerType.FILES, repo.workTree.absolutePath) ?: return
         val bundleFile = File(selectedPath)
-        val destinationPrefix = buildBundleDestinationPrefix(repo, bundleFile)
+        val remoteName = buildBundleRemoteName(bundleFile)
+        val remoteUri = bundleFile.toURI().toString()
 
         tabState.safeProcessing(
             refreshType = RefreshType.ALL_DATA,
@@ -370,53 +377,54 @@ class RepositoryOpenViewModel @Inject constructor(
             subtitle = "Importing ${bundleFile.name}",
             taskType = TaskType.IMPORT_BUNDLE,
         ) { git ->
-            val refSpec = RefSpec("+refs/heads/*:refs/heads/$destinationPrefix/*")
+            ensureBundleRemote(git, remoteName, remoteUri)
 
-            // Try both path and URI; JGit transport handling differs across platforms.
-            val remoteCandidates = listOf(
-                bundleFile.absolutePath,
-                bundleFile.toURI().toString(),
-            )
+            // Import as remote-tracking branches to avoid polluting local branches list.
+            val refSpec = RefSpec("+refs/heads/*:refs/remotes/$remoteName/*")
 
-            var lastError: Exception? = null
-            for (remote in remoteCandidates) {
-                try {
-                    git.fetch()
-                        .setRemote(remote)
-                        .setRefSpecs(refSpec)
-                        .call()
+            git.fetch()
+                .setRemote(remoteName)
+                .setRefSpecs(refSpec)
+                .call()
 
-                    val importedBranches = git.branchList().call()
-                        .filter { it.name.startsWith("refs/heads/$destinationPrefix/") }
+            val importedRemoteBranches = git.branchList()
+                .setListMode(ListBranchCommand.ListMode.REMOTE)
+                .call()
+                .filter { it.name.startsWith("refs/remotes/$remoteName/") }
 
-                    if (importedBranches.isEmpty()) {
-                        return@safeProcessing errorNotification(
-                            "Bundle imported, but no branches were created (bundle has no refs/heads)."
-                        )
-                    }
-
-                    val pickedBranch = pickBranchToCheckout(importedBranches)
-                    val pickedBranchName = Repository.shortenRefName(pickedBranch.name)
-                    val importedCount = importedBranches.size
-
-                    val isClean = git.status().call().isClean
-                    if (isClean) {
-                        checkoutRefUseCase(git, pickedBranch)
-                        return@safeProcessing positiveNotification(
-                            "Bundle imported and checked out \"$pickedBranchName\" ($importedCount branches)"
-                        )
-                    }
-
-                    return@safeProcessing positiveNotification(
-                        "Bundle imported to \"$destinationPrefix\" ($importedCount branches). " +
-                            "To restore files, checkout \"$pickedBranchName\" (working tree is not clean)."
-                    )
-                } catch (ex: Exception) {
-                    lastError = ex
-                }
+            if (importedRemoteBranches.isEmpty()) {
+                return@safeProcessing errorNotification(
+                    "Bundle imported, but no branches were found inside it (no refs/heads)."
+                )
             }
 
-            throw lastError ?: IllegalStateException("Failed to import bundle: unknown error")
+            val pickedBranch = pickBranchToCheckout(importedRemoteBranches)
+            val pickedBranchName = Repository.shortenRefName(pickedBranch.name) // e.g. bundle_x/main
+            val importedCount = importedRemoteBranches.size
+
+            val isClean = git.status().call().isClean
+            if (isClean) {
+                val hasLocalBranches = git.branchList().call().isNotEmpty()
+                if (!hasLocalBranches) {
+                    // For an empty repo, create the branch (e.g. main) so the user lands on a normal branch.
+                    checkoutRefUseCase(git, pickedBranch)
+                    return@safeProcessing positiveNotification(
+                        "Bundle imported as remote \"$remoteName\" ($importedCount branches) and checked out \"$pickedBranchName\""
+                    )
+                }
+
+                // For existing repos, avoid creating extra local branches: restore files via detached checkout.
+                git.checkout().setName(pickedBranch.objectId.name).call()
+                return@safeProcessing positiveNotification(
+                    "Bundle imported as remote \"$remoteName\" ($importedCount branches). " +
+                        "Checked out \"$pickedBranchName\" (detached)"
+                )
+            }
+
+            return@safeProcessing positiveNotification(
+                "Bundle imported as remote \"$remoteName\" ($importedCount branches). " +
+                    "To restore files, checkout \"$pickedBranchName\" (working tree is not clean)."
+            )
         }
     }
 
@@ -424,30 +432,22 @@ class RepositoryOpenViewModel @Inject constructor(
         tabState.newSelectedItem(SelectedItem.UncommittedChanges, scrollToItem = true)
     }
 
-    private fun buildBundleDestinationPrefix(repo: Repository, bundleFile: File): String {
-        val sanitizedName = sanitizeRefComponent(bundleFile.nameWithoutExtension)
-        val baseCandidate = "bundle/$sanitizedName"
+    private suspend fun ensureBundleRemote(git: Git, remoteName: String, remoteUri: String) {
+        val existing = git.remoteList().call().any { it.name == remoteName }
 
-        // We validate a sample ref under this prefix.
-        if (Repository.isValidRefName("refs/heads/$baseCandidate/test")) {
-            val exactExists = repo.exactRef("refs/heads/$baseCandidate") != null
-            val prefixExists = repo.refDatabase
-                .getRefsByPrefix("refs/heads/$baseCandidate/")
-                .iterator()
-                .hasNext()
-
-            if (!exactExists && !prefixExists) {
-                return baseCandidate
-            }
+        if (!existing) {
+            addRemoteUseCase(git, remoteName, remoteUri)
         }
 
-        val suffix = System.currentTimeMillis()
-        val fallbackCandidate = "bundle/$sanitizedName-$suffix"
-        return if (Repository.isValidRefName("refs/heads/$fallbackCandidate/test")) {
-            fallbackCandidate
-        } else {
-            "bundle/import-$suffix"
-        }
+        // Always update URLs so re-importing the same named bundle works even if the file moved.
+        updateRemoteUseCase(git, remoteName, remoteUri, RemoteSetUrlCommand.UriType.FETCH)
+        updateRemoteUseCase(git, remoteName, remoteUri, RemoteSetUrlCommand.UriType.PUSH)
+    }
+
+    private fun buildBundleRemoteName(bundleFile: File): String {
+        val sanitizedName = sanitizeName(bundleFile.nameWithoutExtension)
+        val candidate = "bundle_${sanitizedName}".take(60).trimEnd('_')
+        return candidate.ifBlank { "bundle_import" }
     }
 
     private fun pickBranchToCheckout(importedBranches: List<Ref>): Ref {
@@ -460,12 +460,12 @@ class RepositoryOpenViewModel @Inject constructor(
         return importedBranches.minBy { it.name }
     }
 
-    private fun sanitizeRefComponent(value: String): String {
+    private fun sanitizeName(value: String): String {
         val trimmed = value.trim()
-        if (trimmed.isEmpty()) return "bundle"
+        if (trimmed.isEmpty()) return "import"
         // Replace characters that commonly break ref names.
         val sanitized = trimmed.replace(Regex("""[^0-9A-Za-z._-]"""), "_")
-        return sanitized.take(50).ifBlank { "bundle" }
+        return sanitized.take(50).ifBlank { "import" }
     }
 
     fun openUrlInBrowser(url: String) {

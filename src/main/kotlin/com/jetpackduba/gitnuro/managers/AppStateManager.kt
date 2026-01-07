@@ -46,15 +46,31 @@ class AppStateManager @Inject constructor(
     }
 
     fun loadRepositoriesTabs() {
+        val repoPaths = _latestOpenedRepositoriesPaths.value.toMutableList()
+
+        // 1) Recently opened repositories list (used by Welcome/Open popup)
         val repositoriesPathsSaved = appSettingsRepository.latestOpenedRepositoriesPath
         if (repositoriesPathsSaved.isNotEmpty()) {
             val repositories = Json.decodeFromString<List<String>>(repositoriesPathsSaved)
-            val repoPaths = _latestOpenedRepositoriesPaths.value.toMutableList()
+                .filter { it.isNotBlank() }
 
-            repoPaths.addAll(repositories)
-
-            _latestOpenedRepositoriesPaths.value = repoPaths
+            for (path in repositories) {
+                if (!repoPaths.contains(path)) repoPaths.add(path)
+            }
         }
+
+        // 2) Persisted tabs (so repositories are visible immediately without switching tabs)
+        val tabsSaved = appSettingsRepository.latestTabsOpened
+        if (tabsSaved.isNotEmpty()) {
+            val tabRepositories = Json.decodeFromString<List<String>>(tabsSaved)
+                .filter { it.isNotBlank() }
+
+            for (path in tabRepositories) {
+                if (!repoPaths.contains(path)) repoPaths.add(path)
+            }
+        }
+
+        _latestOpenedRepositoriesPaths.value = repoPaths
     }
 
     fun cancelCoroutines() {
@@ -69,6 +85,35 @@ class AppStateManager @Inject constructor(
 
             appSettingsRepository.latestOpenedRepositoriesPath = Json.encodeToString(repoPaths)
             _latestOpenedRepositoriesPaths.value = repoPaths
+        } finally {
+            mutex.unlock()
+        }
+    }
+
+    /**
+     * Ensures the given repositories are visible in the "recent/open" list immediately.
+     * This is used to show repositories that exist as tabs even if they haven't been opened (selected) yet.
+     */
+    fun ensureRepositoriesKnown(paths: List<String>) = appScope.launch(Dispatchers.IO) {
+        val cleaned = paths.filter { it.isNotBlank() }
+        if (cleaned.isEmpty()) return@launch
+
+        mutex.lock()
+        try {
+            val repoPaths = _latestOpenedRepositoriesPaths.value.toMutableList()
+            var changed = false
+
+            for (path in cleaned) {
+                if (!repoPaths.contains(path)) {
+                    repoPaths.add(path)
+                    changed = true
+                }
+            }
+
+            if (changed) {
+                appSettingsRepository.latestOpenedRepositoriesPath = Json.encodeToString(repoPaths)
+                _latestOpenedRepositoriesPaths.value = repoPaths
+            }
         } finally {
             mutex.unlock()
         }
